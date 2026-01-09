@@ -13,11 +13,11 @@ type Config struct {
 	StoragePath    string     `yaml:"storage_path" env-default:"/data/storage"`
 	GRPC           GRPCConfig `yaml:"grpc"`
 	MigrationsPath string
-	TokenTTL       time.Duration `yaml:"toke_ttl" env-default:"1h"`
+	TokenTTL       time.Duration `yaml:"token_ttl" env-default:"1h"`
 }
 
 type GRPCConfig struct {
-	Port    string        `yaml:"port"`
+	Port    int32         `yaml:"port"`
 	Timeout time.Duration `yaml:"timeout"`
 }
 

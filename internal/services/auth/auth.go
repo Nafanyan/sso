@@ -90,6 +90,7 @@ func (a *Auth) Login(ctx context.Context, email string, password string, appId i
 	log := a.log.With(
 		slog.String("op", op),
 		slog.String("email", email),
+		slog.Int("app_id", int(appId)),
 	)
 
 	log.Info("attempting to login user")
@@ -97,35 +98,30 @@ func (a *Auth) Login(ctx context.Context, email string, password string, appId i
 	user, err := a.userProvider.User(ctx, email)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserNotFound) {
-			a.log.Warn("user not found", sl.Err(err))
-
+			log.Warn("user not found", sl.Err(err))
 			return "", fmt.Errorf("%s: %w", op, err)
 		}
 
-		a.log.Error("failed to get user", sl.Err(err))
-
+		log.Error("failed to get user", sl.Err(err))
 		return "", fmt.Errorf("%s: %w", op, err)
 	}
 
 	if err := bcrypt.CompareHashAndPassword(user.PassHash, []byte(password)); err != nil {
-		a.log.Error("invalid credentials", sl.Err(err))
-
+		log.Error("invalid credentials", sl.Err(err))
 		return "", fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
 	}
 
 	app, err := a.appProvider.App(ctx, appId)
 	if err != nil {
-		a.log.Error("failed to get app", sl.Err(err))
-
+		log.Error("failed to get app", sl.Err(err))
 		return "", fmt.Errorf("%s: %w", op, err)
 	}
 
-	log.Info("user logged is successfully")
+	log.Info("user logged in successfully")
 
 	token, err = jwt.NewToken(user, app, a.tokenTTL)
 	if err != nil {
-		a.log.Error("failed to generate token", sl.Err(err))
-
+		log.Error("failed to generate token", sl.Err(err))
 		return "", fmt.Errorf("%s: %w", op, err)
 	}
 
