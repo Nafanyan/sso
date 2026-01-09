@@ -3,6 +3,8 @@ package auth
 import (
 	"context"
 	"errors"
+	"sso/internal/services/auth"
+	"sso/internal/storage"
 
 	ssov1 "github.com/Nafanyan/sso-proto/gen/go/sso"
 	"google.golang.org/grpc"
