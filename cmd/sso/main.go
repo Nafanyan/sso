@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"sso/internal/app"
 	"sso/internal/config"
+	"sso/internal/lib/logger"
 	"sso/internal/lib/logger/sl"
 	"syscall"
 	"time"
@@ -71,7 +72,7 @@ func setupLogger(env string) *slog.Logger {
 
 	switch env {
 	case envLocal:
-		log = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+		log = slog.New(logger.NewPrettyHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	case envDev:
 		log = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	case envProd:

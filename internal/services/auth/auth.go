@@ -99,7 +99,7 @@ func (a *Auth) Login(ctx context.Context, email string, password string, appId i
 	if err != nil {
 		if errors.Is(err, storage.ErrUserNotFound) {
 			log.Warn("user not found", sl.Err(err))
-			return "", fmt.Errorf("%s: %w", op, err)
+			return "", fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
 		}
 
 		log.Error("failed to get user", sl.Err(err))
