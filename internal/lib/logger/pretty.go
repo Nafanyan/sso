@@ -7,13 +7,11 @@ import (
 	"log/slog"
 )
 
-// prettyHandler - кастомный handler с цветным выводом для local среды
 type prettyHandler struct {
 	opts *slog.HandlerOptions
 	w    io.Writer
 }
 
-// NewPrettyHandler создает новый pretty handler с цветным выводом
 func NewPrettyHandler(w io.Writer, opts *slog.HandlerOptions) *prettyHandler {
 	if opts == nil {
 		opts = &slog.HandlerOptions{}
@@ -24,7 +22,6 @@ func NewPrettyHandler(w io.Writer, opts *slog.HandlerOptions) *prettyHandler {
 	}
 }
 
-// ANSI escape коды для цветов
 const (
 	reset  = "\033[0m"
 	red    = "\033[31m"
@@ -45,7 +42,6 @@ func (h *prettyHandler) Enabled(ctx context.Context, level slog.Level) bool {
 }
 
 func (h *prettyHandler) Handle(ctx context.Context, record slog.Record) error {
-	// Цвет для уровня логирования
 	var levelColor, levelIcon string
 	switch record.Level {
 	case slog.LevelDebug:
@@ -65,16 +61,13 @@ func (h *prettyHandler) Handle(ctx context.Context, record slog.Record) error {
 		levelIcon = "  "
 	}
 
-	// Форматирование времени
 	timeStr := record.Time.Format("15:04:05")
 
-	// Собираем атрибуты
 	var attrs []string
 	record.Attrs(func(a slog.Attr) bool {
 		key := a.Key
 		value := a.Value.String()
 
-		// Цвета для разных типов полей
 		var attrStr string
 		if key == "op" {
 			attrStr = fmt.Sprintf("%s[%s]%s", purple, value, reset)
@@ -87,18 +80,15 @@ func (h *prettyHandler) Handle(ctx context.Context, record slog.Record) error {
 		return true
 	})
 
-	// Формируем финальную строку
 	levelStr := record.Level.String()
 	if len(levelStr) < 5 {
 		levelStr += " "
 	}
 
-	// Время + уровень с иконкой + сообщение
 	msg := gray + timeStr + reset + " " +
 		levelColor + bold + levelStr + levelIcon + reset + " " +
 		bold + record.Message + reset + " "
 
-	// Добавляем атрибуты
 	for _, attr := range attrs {
 		msg += attr + " "
 	}
@@ -110,11 +100,9 @@ func (h *prettyHandler) Handle(ctx context.Context, record slog.Record) error {
 }
 
 func (h *prettyHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	// Упрощенная реализация - возвращаем тот же handler
 	return h
 }
 
 func (h *prettyHandler) WithGroup(name string) slog.Handler {
-	// Упрощенная реализация - возвращаем тот же handler
 	return h
 }

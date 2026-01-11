@@ -15,11 +15,14 @@ import (
 )
 
 type Storage struct {
-	db              *sql.DB
-	userInsertStmt  *sql.Stmt
-	userByEmailStmt *sql.Stmt
-	appByIDStmt     *sql.Stmt
-	log             *slog.Logger
+	db                          *sql.DB
+	userInsertStmt              *sql.Stmt
+	userByEmailStmt             *sql.Stmt
+	appByCodeStmt               *sql.Stmt
+	userAppByUserIdAndAppIdStmt *sql.Stmt
+	userAppInsertStmt           *sql.Stmt
+	userAppUpdateStmt           *sql.Stmt
+	log                         *slog.Logger
 }
 
 func New(storagePath string, log *slog.Logger) (storage *Storage, err error) {
@@ -69,19 +72,50 @@ func New(storagePath string, log *slog.Logger) (storage *Storage, err error) {
 	}
 	stmts = append(stmts, userByEmailStmt)
 
-	appByIDStmt, err := db.Prepare("SELECT id, name, secret FROM apps WHERE id = ?")
+	appByCodeStmt, err := db.Prepare("SELECT id, name, secret FROM apps WHERE code = ?")
 	if err != nil {
-		opLog.Error("failed to prepare app by id statement", sl.Err(err))
+		opLog.Error("failed to prepare app by code statement", sl.Err(err))
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
-	stmts = append(stmts, appByIDStmt)
+	stmts = append(stmts, appByCodeStmt)
+
+	userAppByUserIdAndAppIdStmt, err := db.Prepare(`
+		SELECT user_id, app_id, is_enabled 
+		FROM user_app 
+		WHERE user_id = ? AND app_id = ?`)
+	if err != nil {
+		opLog.Error("failed to prepare userApp by user id and app id statement", sl.Err(err))
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+	stmts = append(stmts, userAppByUserIdAndAppIdStmt)
+
+	userAppInsertStmt, err := db.Prepare(`
+		INSERT INTO user_app (user_id, app_id, is_enabled) VALUES (?, ?, ?)
+	`)
+	if err != nil {
+		opLog.Error("failed to prepare userApp insert statement", sl.Err(err))
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+	stmts = append(stmts, userAppInsertStmt)
+
+	userAppUpdateStmt, err := db.Prepare(`
+		UPDATE user_app SET is_enabled = ? WHERE user_id = ? AND app_id = ?
+	`)
+	if err != nil {
+		opLog.Error("failed to prepare userApp update statement", sl.Err(err))
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+	stmts = append(stmts, userAppUpdateStmt)
 
 	storage = &Storage{
-		db:              db,
-		userInsertStmt:  userInsertStmt,
-		userByEmailStmt: userByEmailStmt,
-		appByIDStmt:     appByIDStmt,
-		log:             log,
+		db:                          db,
+		userInsertStmt:              userInsertStmt,
+		userByEmailStmt:             userByEmailStmt,
+		appByCodeStmt:               appByCodeStmt,
+		userAppByUserIdAndAppIdStmt: userAppByUserIdAndAppIdStmt,
+		userAppInsertStmt:           userAppInsertStmt,
+		userAppUpdateStmt:           userAppUpdateStmt,
+		log:                         log,
 	}
 
 	return storage, nil
@@ -152,17 +186,17 @@ func (s *Storage) User(ctx context.Context, email string) (models.User, error) {
 	return user, nil
 }
 
-func (s *Storage) App(ctx context.Context, appID int32) (models.App, error) {
+func (s *Storage) App(ctx context.Context, appCode string) (models.App, error) {
 	const op = "storage.sqlite.App"
 
 	log := s.log.With(
 		slog.String("op", op),
-		slog.Int("app_id", int(appID)),
+		slog.String("app_code", appCode),
 	)
 
 	var app models.App
 
-	err := s.appByIDStmt.QueryRowContext(ctx, appID).Scan(&app.ID, &app.Name, &app.Secret)
+	err := s.appByCodeStmt.QueryRowContext(ctx, appCode).Scan(&app.ID, &app.Code, &app.Secret)
 	if err != nil {
 		if ctx.Err() != nil {
 			err := fmt.Errorf("%s: context error: %w", op, ctx.Err())
@@ -182,6 +216,116 @@ func (s *Storage) App(ctx context.Context, appID int32) (models.App, error) {
 	return app, nil
 }
 
+func (s *Storage) UserApp(ctx context.Context, userID int64, appID int32) (models.UserApp, error) {
+	const op = "storage.sqlite.UserApp"
+
+	log := s.log.With(
+		slog.String("op", op),
+		slog.Int64("user_id", userID),
+		slog.Int("app_id", int(appID)),
+	)
+
+	var userApp models.UserApp
+
+	err := s.userAppByUserIdAndAppIdStmt.QueryRowContext(ctx, userID, appID).
+		Scan(&userApp.UserID, &userApp.AppID, &userApp.IsEnabled)
+	if err != nil {
+		if ctx.Err() != nil {
+			err := fmt.Errorf("%s: context error: %w", op, ctx.Err())
+			log.Error("failed to get userApp: context error", sl.Err(err))
+			return models.UserApp{}, err
+		}
+
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Warn("userApp not found")
+			return models.UserApp{}, fmt.Errorf("%s: %w", op, storage.ErrUserAppNotFound)
+		}
+
+		log.Error("failed to get userApp", sl.Err(err))
+		return models.UserApp{}, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return userApp, nil
+}
+
+func (s *Storage) SaveUserApp(
+	ctx context.Context,
+	userID int64,
+	appID int32,
+	isEnabled bool,
+) (int64, error) {
+	const op = "storage.sqlite.SaveUserApp"
+
+	log := s.log.With(
+		slog.String("op", op),
+		slog.Int64("user_id", userID),
+		slog.Int("app_id", int(appID)),
+	)
+
+	res, err := s.userInsertStmt.Exec(ctx, userID, appID, isEnabled)
+	if err != nil {
+		if ctx.Err() != nil {
+			err := fmt.Errorf("%s: context error: %w", op, ctx.Err())
+			log.Error("failed to save userApp: context error", sl.Err(err))
+			return 0, err
+		}
+
+		var sqliteErr sqlite3.Error
+		if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
+			log.Warn("failed to save userApp: userApp already exists")
+			return 0, fmt.Errorf("%s: %w", op, storage.ErrUserAppExists)
+		}
+
+		log.Error("failed to save userApp", sl.Err(err))
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		log.Error("failed to get last insert id", sl.Err(err))
+		return 0, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return id, nil
+}
+
+func (s *Storage) UpdateUserApp(ctx context.Context, userID int64, appID int32, isEnabled bool) error {
+	const op = "storage.sqlite.UpdateUserApp"
+
+	log := s.log.With(
+		slog.String("op", op),
+		slog.Int64("user_id", userID),
+		slog.Int("app_id", int(appID)),
+		slog.Bool("is_enabled", isEnabled),
+	)
+
+	res, err := s.userAppUpdateStmt.ExecContext(ctx, isEnabled, userID, appID)
+	if err != nil {
+		if ctx.Err() != nil {
+			err := fmt.Errorf("%s: context error: %w", op, ctx.Err())
+			log.Error("failed to update userApp: context error", sl.Err(err))
+			return err
+		}
+
+		log.Error("failed to update userApp", sl.Err(err))
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		log.Error("failed to get rows affected", sl.Err(err))
+		return fmt.Errorf("%s: %w", op, err)
+	}
+
+	if rowsAffected == 0 {
+		log.Warn("userApp not found for update")
+		return fmt.Errorf("%s: %w", op, storage.ErrUserAppNotFound)
+	}
+
+	log.Info("userApp updated successfully")
+	return nil
+}
+
 func (s *Storage) Close() error {
 	const op = "storage.sqlite.Close"
 
@@ -192,12 +336,36 @@ func (s *Storage) Close() error {
 	log := s.log.With(slog.String("op", op))
 	var errs []error
 
-	if s.appByIDStmt != nil {
-		if err := s.appByIDStmt.Close(); err != nil {
-			log.Error("failed to close app by id statement", sl.Err(err))
-			errs = append(errs, fmt.Errorf("close appByIDStmt: %w", err))
+	if s.userAppUpdateStmt != nil {
+		if err := s.userAppUpdateStmt.Close(); err != nil {
+			log.Error("failed to close userApp update statement", sl.Err(err))
+			errs = append(errs, fmt.Errorf("close userAppUpdateStmt: %w", err))
 		}
-		s.appByIDStmt = nil
+		s.userAppUpdateStmt = nil
+	}
+
+	if s.userAppInsertStmt != nil {
+		if err := s.userAppInsertStmt.Close(); err != nil {
+			log.Error("failed to close userApp insert statement", sl.Err(err))
+			errs = append(errs, fmt.Errorf("close userAppInsertStmt: %w", err))
+		}
+		s.userAppInsertStmt = nil
+	}
+
+	if s.userAppByUserIdAndAppIdStmt != nil {
+		if err := s.userAppByUserIdAndAppIdStmt.Close(); err != nil {
+			log.Error("failed to close app by id statement", sl.Err(err))
+			errs = append(errs, fmt.Errorf("close userAppByUserIdAndAppIdStmt: %w", err))
+		}
+		s.userAppByUserIdAndAppIdStmt = nil
+	}
+
+	if s.appByCodeStmt != nil {
+		if err := s.appByCodeStmt.Close(); err != nil {
+			log.Error("failed to close app by id statement", sl.Err(err))
+			errs = append(errs, fmt.Errorf("close appByCodeStmt: %w", err))
+		}
+		s.appByCodeStmt = nil
 	}
 
 	if s.userByEmailStmt != nil {

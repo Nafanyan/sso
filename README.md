@@ -4,14 +4,17 @@
 
 ## Описание
 
-SSO сервис предоставляет централизованную систему аутентификации, позволяющую пользователям регистрироваться и входить в различные приложения через единую точку входа. Сервис использует JWT токены для аутентификации и поддерживает работу с несколькими приложениями.
+SSO сервис предоставляет централизованную систему аутентификации, позволяющую пользователям регистрироваться и входить в различные приложения через единую точку входа. Сервис использует JWT токены для аутентификации и поддерживает работу с несколькими приложениями. Система включает контроль доступа на уровне связей пользователь-приложение, что позволяет гибко управлять правами доступа к различным приложениям.
 
 ## Основные возможности
 
 - ✅ Регистрация новых пользователей
 - ✅ Аутентификация пользователей (логин)
 - ✅ Генерация JWT токенов для авторизации
+- ✅ Валидация JWT токенов
+- ✅ Управление доступом пользователей к приложениям (grant/revoke access)
 - ✅ Поддержка множественных приложений
+- ✅ Контроль доступа на уровне user-app связей
 - ✅ Хеширование паролей с использованием bcrypt
 - ✅ Валидация входных данных
 - ✅ Graceful shutdown
@@ -48,8 +51,10 @@ sso/
 │   │   └── auth/         # Бизнес-логика аутентификации
 │   └── storage/
 │       └── sqlite/       # Реализация хранилища
-├── migrations/           # SQL миграции
+├── migrations/           # SQL миграции (основные)
 ├── tests/                # Интеграционные тесты
+│   ├── migrations/       # SQL миграции для тестов
+│   └── suite/            # Test suite
 └── storage/              # Директория для БД (SQLite)
 ```
 
@@ -87,7 +92,7 @@ export CONFIG_PATH=./config/config_local.yaml
 ### Запуск миграций
 
 ```bash
-go run cmd/migrator/main.go
+go run ./cmd/migrator --storage-path=./storage/sso.db --migrations-path=./migrations
 ```
 
 ### Запуск приложения
@@ -141,7 +146,7 @@ resp, err := authClient.Register(ctx, req)
 message LoginRequest {
   string email = 1;
   string password = 2;
-  int32 app_id = 3;
+  string app_code = 3;
 }
 ```
 
@@ -157,17 +162,105 @@ message LoginResponse {
 req := &ssov1.LoginRequest{
     Email:    "user@example.com",
     Password: "securepassword",
-    AppId:    1,
+    AppCode:  "web",
 }
 resp, err := authClient.Login(ctx, req)
 // resp.Token содержит JWT токен
+```
+
+**Примечание:** Для успешного входа пользователь должен иметь доступ к указанному приложению (через таблицу `user_app`).
+
+### Валидация токена
+
+**Endpoint:** `Auth.Validate`
+
+**Request:**
+```protobuf
+message ValidateTokenRequest {
+  string token = 1;
+  string app_code = 2;
+}
+```
+
+**Response:**
+```protobuf
+message ValidateTokenResponse {
+  string email = 1;
+}
+```
+
+**Пример использования:**
+```go
+req := &ssov1.ValidateTokenRequest{
+    Token:   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    AppCode: "web",
+}
+resp, err := authClient.Validate(ctx, req)
+// resp.Email содержит email пользователя, если токен валиден
+```
+
+### Предоставление доступа
+
+**Endpoint:** `Auth.AllowAccess` или `Auth.GrantAccess`
+
+**Request:**
+```protobuf
+message AllowAccessRequest {
+  string email = 1;
+  string app_code = 2;
+}
+```
+
+**Response:**
+```protobuf
+message AllowAccessResponse {
+  string app_code = 1;
+}
+```
+
+**Пример использования:**
+```go
+req := &ssov1.AllowAccessRequest{
+    Email:   "user@example.com",
+    AppCode: "web",
+}
+resp, err := authClient.AllowAccess(ctx, req)
+```
+
+### Отзыв доступа
+
+**Endpoint:** `Auth.RevokeAccess`
+
+**Request:**
+```protobuf
+message RevokeAccessRequest {
+  string email = 1;
+  string app_code = 2;
+}
+```
+
+**Response:**
+```protobuf
+message RevokeAccessResponse {
+  string app_code = 1;
+}
+```
+
+**Пример использования:**
+```go
+req := &ssov1.RevokeAccessRequest{
+    Email:   "user@example.com",
+    AppCode: "web",
+}
+resp, err := authClient.RevokeAccess(ctx, req)
 ```
 
 ## Валидация
 
 - **Email:** обязательное поле, длина от 3 до 254 символов
 - **Password:** обязательное поле, минимум 8 символов
-- **App ID:** обязательное поле, должен существовать в базе данных
+- **App Code:** обязательное поле, должен существовать в базе данных
+- **Token:** обязательное поле для валидации, должен быть валидным JWT токеном
 
 ## Безопасность
 
@@ -175,6 +268,9 @@ resp, err := authClient.Login(ctx, req)
 - JWT токены подписываются секретом приложения
 - Пароли не хранятся в открытом виде
 - Валидация всех входных данных
+- Контроль доступа на уровне приложений (user-app связи)
+- Проверка прав доступа при логине и валидации токена
+- Каждое приложение имеет уникальный секрет для подписи токенов
 
 ## Тестирование
 

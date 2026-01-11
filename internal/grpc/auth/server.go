@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"sso/internal/lib/jwt"
 	"sso/internal/services/auth"
 	"sso/internal/storage"
 
@@ -16,12 +17,17 @@ const (
 	msgEmailRequired      = "email is required"
 	msgPasswordRequired   = "password is required"
 	msgAppIDRequired      = "app_id is required"
+	msgAppCodeRequired    = "app_code is required"
 	msgInvalidEmail       = "invalid email format"
 	msgPasswordTooShort   = "password must be at least 8 characters"
 	msgInvalidCredentials = "invalid email or password"
 	msgUserExists         = "user already exists"
 	msgLoginFailed        = "failed to login"
 	msgRegisterFailed     = "failed to register user"
+	msgTokenRequired      = "Token is required"
+	msgTokenExpired       = "Token is expired"
+	msgTokenInvalid       = "Token is invalid"
+	msgUserAppNotEnabled  = "Access denied"
 )
 
 type serverAPI struct {
@@ -34,13 +40,24 @@ type Auth interface {
 		ctx context.Context,
 		email string,
 		password string,
-		appId int32,
+		appCode string,
 	) (token string, err error)
 	RegisterNewUser(
 		ctx context.Context,
 		email string,
 		password string,
-	) (userId int64, err error)
+	) (userID int64, err error)
+	ValidateToken(
+		ctx context.Context,
+		token string,
+		appCode string,
+	) (email string, err error)
+	AccessControl(
+		ctx context.Context,
+		email string,
+		appCode string,
+		isEnabled bool,
+	) (string, error)
 }
 
 func Register(gRPCServer *grpc.Server, auth Auth) {
@@ -58,14 +75,18 @@ func (s *serverAPI) Login(ctx context.Context, in *ssov1.LoginRequest) (*ssov1.L
 		return nil, status.Error(codes.InvalidArgument, msgPasswordRequired)
 	}
 
-	if in.GetAppId() == 0 {
-		return nil, status.Error(codes.InvalidArgument, msgAppIDRequired)
+	if in.GetAppCode() == "" {
+		return nil, status.Error(codes.InvalidArgument, msgAppCodeRequired)
 	}
 
-	token, err := s.auth.Login(ctx, in.Email, in.Password, int32(in.GetAppId()))
+	token, err := s.auth.Login(ctx, in.Email, in.Password, in.GetAppCode())
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidCredentials) {
 			return nil, status.Error(codes.InvalidArgument, msgInvalidCredentials)
+		}
+
+		if errors.Is(err, auth.ErrUserAppNotEnabled) {
+			return nil, status.Error(codes.Unauthenticated, msgUserAppNotEnabled)
 		}
 
 		return nil, status.Error(codes.Internal, msgLoginFailed)
@@ -101,4 +122,78 @@ func (s *serverAPI) Register(ctx context.Context, in *ssov1.RegisterRequest) (*s
 	}
 
 	return &ssov1.RegisterResponse{UserId: uid}, nil
+}
+
+func (s *serverAPI) Validate(ctx context.Context, in *ssov1.ValidateTokenRequest) (*ssov1.ValidateTokenResponse, error) {
+	if in.GetToken() == "" {
+		return nil, status.Error(codes.InvalidArgument, msgTokenRequired)
+	}
+
+	if in.GetAppCode() == "" {
+		return nil, status.Error(codes.InvalidArgument, msgAppCodeRequired)
+	}
+
+	email, err := s.auth.ValidateToken(ctx, in.GetToken(), in.GetAppCode())
+	if err != nil {
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			return nil, status.Error(codes.Unauthenticated, msgTokenExpired)
+		}
+
+		if errors.Is(err, auth.ErrUserAppNotEnabled) {
+			return nil, status.Error(codes.Unauthenticated, msgUserAppNotEnabled)
+		}
+
+		return nil, status.Error(codes.Unauthenticated, msgTokenInvalid)
+
+	}
+
+	return &ssov1.ValidateTokenResponse{Email: email}, nil
+}
+
+func (s *serverAPI) AllowAccess(ctx context.Context, in *ssov1.AllowAccessRequest) (*ssov1.AllowAccessResponse, error) {
+	if in.GetEmail() == "" {
+		return nil, status.Error(codes.InvalidArgument, msgEmailRequired)
+	}
+
+	if in.GetAppCode() == "" {
+		return nil, status.Error(codes.InvalidArgument, msgAppCodeRequired)
+	}
+
+	appCode, err := s.auth.AccessControl(ctx, in.GetEmail(), in.GetAppCode(), true)
+	if err != nil {
+	}
+
+	return &ssov1.AllowAccessResponse{AppCode: appCode}, nil
+}
+
+func (s *serverAPI) RevokeAccess(ctx context.Context, in *ssov1.RevokeAccessRequest) (*ssov1.RevokeAccessResponse, error) {
+	if in.GetEmail() == "" {
+		return nil, status.Error(codes.InvalidArgument, msgEmailRequired)
+	}
+
+	if in.GetAppCode() == "" {
+		return nil, status.Error(codes.InvalidArgument, msgAppCodeRequired)
+	}
+
+	appCode, err := s.auth.AccessControl(ctx, in.GetEmail(), in.GetAppCode(), false)
+	if err != nil {
+	}
+
+	return &ssov1.RevokeAccessResponse{AppCode: appCode}, nil
+}
+
+func (s *serverAPI) GrantAccess(ctx context.Context, in *ssov1.GrantAccessRequest) (*ssov1.GrantAccessResponse, error) {
+	if in.GetEmail() == "" {
+		return nil, status.Error(codes.InvalidArgument, msgEmailRequired)
+	}
+
+	if in.GetAppCode() == "" {
+		return nil, status.Error(codes.InvalidArgument, msgAppCodeRequired)
+	}
+
+	appCode, err := s.auth.AccessControl(ctx, in.GetEmail(), in.GetAppCode(), true)
+	if err != nil {
+	}
+
+	return &ssov1.GrantAccessResponse{AppCode: appCode}, nil
 }

@@ -3,7 +3,6 @@ module sso
 go 1.24.11
 
 require (
-	github.com/Nafanyan/sso-proto v0.0.0-20260108142308-6b7985fade5d
 	github.com/brianvoe/gofakeit/v6 v6.23.2
 	github.com/golang-jwt/jwt/v5 v5.0.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
@@ -17,6 +16,7 @@ require (
 
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
+	github.com/Nafanyan/sso-proto v0.0.0-20260111111150-85dc4edcdf51 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
