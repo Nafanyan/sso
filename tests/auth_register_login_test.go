@@ -67,7 +67,7 @@ func randomFakePassword() string {
 	return gofakeit.Password(true, true, true, true, false, passDefaultLen)
 }
 
-func TestLogin_FailCases(t *testing.T) {
+func TestRegister_FailCases(t *testing.T) {
 	ctx, st := suite.New(t)
 
 	tests := []struct {

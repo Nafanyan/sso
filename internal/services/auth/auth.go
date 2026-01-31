@@ -18,6 +18,7 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrUserAppNotEnabled  = errors.New("user not have access")
 	ErrInvalidToken       = errors.New("invalide token")
+	ErrAppNotFound        = errors.New("App not found")
 )
 
 type UserSaver interface {
@@ -265,6 +266,10 @@ func getApp(
 ) (models.App, error) {
 	app, err := appProvider.App(ctx, appCode)
 	if err != nil {
+		if errors.Is(err, storage.ErrAppNotFound) {
+			log.Warn("app not found", sl.Err(err))
+			return models.App{}, fmt.Errorf("%s: %w", op, ErrAppNotFound)
+		}
 		log.Error("failed to get app", sl.Err(err))
 		return models.App{}, fmt.Errorf("%s: %w", op, err)
 	}

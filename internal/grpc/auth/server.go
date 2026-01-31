@@ -23,11 +23,14 @@ const (
 	msgInvalidCredentials = "invalid email or password"
 	msgUserExists         = "user already exists"
 	msgLoginFailed        = "failed to login"
+	msgLogoutFailed       = "failed to logout"
 	msgRegisterFailed     = "failed to register user"
 	msgTokenRequired      = "Token is required"
 	msgTokenExpired       = "Token is expired"
 	msgTokenInvalid       = "Token is invalid"
 	msgUserAppNotEnabled  = "Access denied"
+	msgUserNotFound       = "User not found"
+	msgAppNotFound        = "App not found"
 )
 
 type serverAPI struct {
@@ -84,10 +87,6 @@ func (s *serverAPI) Login(ctx context.Context, in *ssov1.LoginRequest) (*ssov1.L
 			return nil, status.Error(codes.InvalidArgument, msgInvalidCredentials)
 		}
 
-		if errors.Is(err, auth.ErrUserAppNotEnabled) {
-			return nil, status.Error(codes.Unauthenticated, msgUserAppNotEnabled)
-		}
-
 		return nil, status.Error(codes.Internal, msgLoginFailed)
 	}
 
@@ -109,7 +108,15 @@ func (s *serverAPI) Logout(ctx context.Context, in *ssov1.LogoutRequest) (*ssov1
 
 	isSuccess, err := s.auth.Logout(ctx, in.Email, in.AppCode)
 	if err != nil {
-		return nil, status.Error(codes.Internal, msgRegisterFailed)
+		if errors.Is(err, auth.ErrInvalidCredentials) {
+			return nil, status.Error(codes.InvalidArgument, msgUserNotFound)
+		}
+
+		if errors.Is(err, auth.ErrAppNotFound) {
+			return nil, status.Error(codes.InvalidArgument, msgAppNotFound)
+		}
+
+		return nil, status.Error(codes.Internal, msgLogoutFailed)
 	}
 
 	return &ssov1.LogoutResponse{Success: isSuccess}, nil
