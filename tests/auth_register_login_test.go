@@ -13,10 +13,9 @@ import (
 )
 
 const (
-	emptyAppID = 0
-	appID      = 1
-	appSecret  = "test-secret"
-
+	emptyAppCode   = ""
+	appSecret      = "test-secret"
+	appCode        = "test"
 	passDefaultLen = 10
 )
 
@@ -37,7 +36,7 @@ func TestRegisterLogin_Login_HappyPath(t *testing.T) {
 	respLogin, err := suite.AuthClient.Login(ctx, &ssov1.LoginRequest{
 		Email:    email,
 		Password: pass,
-		AppId:    appID,
+		AppCode:  appCode,
 	})
 	require.NoError(t, err)
 
@@ -56,7 +55,7 @@ func TestRegisterLogin_Login_HappyPath(t *testing.T) {
 
 	assert.Equal(t, respReg.GetUserId(), int64(claims["uid"].(float64)))
 	assert.Equal(t, email, claims["email"].(string))
-	assert.Equal(t, appID, int(claims["app_id"].(float64)))
+	assert.Equal(t, appCode, claims["app_code"].(string))
 
 	const deltaSeconds = 1
 
@@ -75,43 +74,43 @@ func TestLogin_FailCases(t *testing.T) {
 		name        string
 		email       string
 		password    string
-		appID       int32
+		appCode     string
 		expectedErr string
 	}{
 		{
 			name:        "Login with Empty Password",
 			email:       gofakeit.Email(),
 			password:    "",
-			appID:       appID,
+			appCode:     appCode,
 			expectedErr: "password is required",
 		},
 		{
 			name:        "Login with Empty Email",
 			email:       "",
 			password:    randomFakePassword(),
-			appID:       appID,
+			appCode:     appCode,
 			expectedErr: "email is required",
 		},
 		{
 			name:        "Login with Both Empty Email and Password",
 			email:       "",
 			password:    "",
-			appID:       appID,
+			appCode:     appCode,
 			expectedErr: "email is required",
 		},
 		{
 			name:        "Login with Non-Matching Password",
 			email:       gofakeit.Email(),
 			password:    randomFakePassword(),
-			appID:       appID,
+			appCode:     appCode,
 			expectedErr: "invalid email or password",
 		},
 		{
-			name:        "Login without AppID",
+			name:        "Login without AppCode",
 			email:       gofakeit.Email(),
 			password:    randomFakePassword(),
-			appID:       emptyAppID,
-			expectedErr: "app_id is required",
+			appCode:     emptyAppCode,
+			expectedErr: "app_code is required",
 		},
 	}
 
@@ -126,7 +125,7 @@ func TestLogin_FailCases(t *testing.T) {
 			_, err = st.AuthClient.Login(ctx, &ssov1.LoginRequest{
 				Email:    tt.email,
 				Password: tt.password,
-				AppId:    tt.appID,
+				AppCode:  tt.appCode,
 			})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), tt.expectedErr)

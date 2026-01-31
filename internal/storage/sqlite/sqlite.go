@@ -72,7 +72,7 @@ func New(storagePath string, log *slog.Logger) (storage *Storage, err error) {
 	}
 	stmts = append(stmts, userByEmailStmt)
 
-	appByCodeStmt, err := db.Prepare("SELECT id, name, secret FROM apps WHERE code = ?")
+	appByCodeStmt, err := db.Prepare("SELECT id, code, secret FROM apps WHERE code = ?")
 	if err != nil {
 		opLog.Error("failed to prepare app by code statement", sl.Err(err))
 		return nil, fmt.Errorf("%s: %w", op, err)
@@ -262,7 +262,7 @@ func (s *Storage) SaveUserApp(
 		slog.Int("app_id", int(appID)),
 	)
 
-	res, err := s.userInsertStmt.Exec(ctx, userID, appID, isEnabled)
+	res, err := s.userAppInsertStmt.ExecContext(ctx, userID, appID, isEnabled)
 	if err != nil {
 		if ctx.Err() != nil {
 			err := fmt.Errorf("%s: context error: %w", op, ctx.Err())

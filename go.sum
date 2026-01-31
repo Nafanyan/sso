@@ -1,13 +1,7 @@
 github.com/BurntSushi/toml v1.2.1 h1:9F2/+DoOYIOksmaJFPw1tGFy1eDnIJXg+UHjuD8lTak=
 github.com/BurntSushi/toml v1.2.1/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
-github.com/Nafanyan/sso-proto v0.0.0-20260108142308-6b7985fade5d h1:GDtrk5nR2fmY7xIs42OZ/M0KKW4WAT7Lddi9zjLtWm4=
-github.com/Nafanyan/sso-proto v0.0.0-20260108142308-6b7985fade5d/go.mod h1:xbCT6ASFxjBEWhdZykhS4/V/5Gqg18hy3HyN7yEqwJ8=
-github.com/Nafanyan/sso-proto v0.0.0-20260110221147-de8706dea134 h1:VZULfEWm9rR2J4Vg6YfAbnQIcH/LgRW9jbkQG/UZkKY=
-github.com/Nafanyan/sso-proto v0.0.0-20260110221147-de8706dea134/go.mod h1:xbCT6ASFxjBEWhdZykhS4/V/5Gqg18hy3HyN7yEqwJ8=
-github.com/Nafanyan/sso-proto v0.0.0-20260111093027-8d37ba476d42 h1:y5rc/ayVeviZ0joGhZlIPMWprdY2LqrLVdX3SN2uV/8=
-github.com/Nafanyan/sso-proto v0.0.0-20260111093027-8d37ba476d42/go.mod h1:xbCT6ASFxjBEWhdZykhS4/V/5Gqg18hy3HyN7yEqwJ8=
-github.com/Nafanyan/sso-proto v0.0.0-20260111111150-85dc4edcdf51 h1:GMwSKFVDpYa2AAYLs1RtyqkMaaAfM4ya4TztM0lqWZ0=
-github.com/Nafanyan/sso-proto v0.0.0-20260111111150-85dc4edcdf51/go.mod h1:xbCT6ASFxjBEWhdZykhS4/V/5Gqg18hy3HyN7yEqwJ8=
+github.com/Nafanyan/sso-proto v0.0.0-20260131142158-1c2b0f688f40 h1:XkW7yjIey5H3X/n6z0xADV4l7nDSjAjpdjDvX/NALNA=
+github.com/Nafanyan/sso-proto v0.0.0-20260131142158-1c2b0f688f40/go.mod h1:xbCT6ASFxjBEWhdZykhS4/V/5Gqg18hy3HyN7yEqwJ8=
 github.com/brianvoe/gofakeit/v6 v6.23.2 h1:lVde18uhad5wII/f5RMVFLtdQNE0HaGFuBUXmYKk8i8=
 github.com/brianvoe/gofakeit/v6 v6.23.2/go.mod h1:Ow6qC71xtwm79anlwKRlWZW6zVq9D2XHE4QSSMP/rU8=
 github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc h1:U9qPSI2PIWSS1VwoXQT9A3Wy9MM3WgvqSxFWenqJduM=

@@ -2,14 +2,14 @@ package logger
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"log/slog"
 )
 
 type prettyHandler struct {
-	opts *slog.HandlerOptions
-	w    io.Writer
+	opts  *slog.HandlerOptions
+	w     io.Writer
+	attrs []slog.Attr // атрибуты из With()
 }
 
 func NewPrettyHandler(w io.Writer, opts *slog.HandlerOptions) *prettyHandler {
@@ -63,20 +63,16 @@ func (h *prettyHandler) Handle(ctx context.Context, record slog.Record) error {
 
 	timeStr := record.Time.Format("15:04:05")
 
-	var attrs []string
-	record.Attrs(func(a slog.Attr) bool {
-		key := a.Key
-		value := a.Value.String()
+	formatAttr := func(a slog.Attr) string {
+		return blue + a.Key + reset + "=" + gray + a.Value.String() + reset
+	}
 
-		var attrStr string
-		if key == "op" {
-			attrStr = fmt.Sprintf("%s[%s]%s", purple, value, reset)
-		} else if key == "error" {
-			attrStr = fmt.Sprintf("%s%s=%s%s", red, key, value, reset)
-		} else {
-			attrStr = blue + key + reset + "=" + gray + value + reset
-		}
-		attrs = append(attrs, attrStr)
+	var attrs []string
+	for _, a := range h.attrs {
+		attrs = append(attrs, formatAttr(a))
+	}
+	record.Attrs(func(a slog.Attr) bool {
+		attrs = append(attrs, formatAttr(a))
 		return true
 	})
 
@@ -100,7 +96,10 @@ func (h *prettyHandler) Handle(ctx context.Context, record slog.Record) error {
 }
 
 func (h *prettyHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return h
+	newAttrs := make([]slog.Attr, 0, len(h.attrs)+len(attrs))
+	newAttrs = append(newAttrs, h.attrs...)
+	newAttrs = append(newAttrs, attrs...)
+	return &prettyHandler{opts: h.opts, w: h.w, attrs: newAttrs}
 }
 
 func (h *prettyHandler) WithGroup(name string) slog.Handler {

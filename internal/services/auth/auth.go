@@ -86,6 +86,7 @@ func (a *Auth) RegisterNewUser(ctx context.Context, email string, password strin
 	)
 	log.Info("registering user")
 
+	// Генерация хэша от пароля
 	passHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		log.Error("failed to generate password hash", sl.Err(err))
@@ -93,12 +94,15 @@ func (a *Auth) RegisterNewUser(ctx context.Context, email string, password strin
 		return 0, fmt.Errorf("%s: %w", op, err)
 	}
 
+	// Сохранение User в БД
 	id, err := a.userSaver.SaveUser(ctx, email, passHash)
 	if err != nil {
 		log.Error("failed to save user", sl.Err(err))
 
 		return 0, fmt.Errorf("%s: %w", op, err)
 	}
+
+	log.Info("user registered is successfully")
 
 	return id, nil
 }
@@ -114,35 +118,85 @@ func (a *Auth) Login(ctx context.Context, email string, password string, appCode
 
 	log.Info("attempting to login user")
 
+	// Получение User
 	user, err := getUser(ctx, a.userProvider, email, log, op)
 	if err != nil {
 		return "", err
 	}
 
+	// Проверка валидности пароля по хэшу
 	if err := bcrypt.CompareHashAndPassword(user.PassHash, []byte(password)); err != nil {
 		log.Error("invalid credentials", sl.Err(err))
 		return "", fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
 	}
 
+	// Получение App
 	app, err := getApp(ctx, a.appProvider, appCode, log, op)
 	if err != nil {
 		return "", err
 	}
 
-	err = isAccessAllowed(ctx, a.userAppProvider, user.ID, app.ID, log, op)
-	if err != nil {
-		return "", err
+	// Получение UserApp, если нет - создаём новый с доступом, иначе включаем доступ
+	_, err = getUserApp(ctx, a.userAppProvider, user.ID, app.ID, log, op)
+	if err != nil && errors.Is(err, storage.ErrUserAppNotFound) {
+		err = saveUserApp(ctx, a.userAppSaver, user.ID, app.ID, true, log, op)
+		if err != nil {
+			return "", err
+		}
 	}
 
-	log.Info("user logged in successfully")
+	if err != nil {
+		log.Error("failed to get user app", sl.Err(err))
+		return "", fmt.Errorf("%s: %w", op, err)
+	}
 
+	// Генерация токена
 	token, err = jwt.NewToken(user, app, a.tokenTTL)
 	if err != nil {
 		log.Error("failed to generate token", sl.Err(err))
 		return "", fmt.Errorf("%s: %w", op, err)
 	}
 
+	log.Info("user logged is successfully")
+
 	return token, nil
+}
+
+func (a *Auth) Logout(ctx context.Context, email string, appCode string) (isSuccess bool, err error) {
+	const op = "Auth.Logout"
+	log := a.log.With(
+		slog.String("op", op),
+		slog.String("email", email),
+		slog.String("app_code", appCode),
+	)
+	log.Info("attempting to logout user")
+
+	// Получение User
+	user, err := getUser(ctx, a.userProvider, email, log, op)
+	if err != nil {
+		return false, err
+	}
+
+	// Получение App
+	app, err := getApp(ctx, a.appProvider, appCode, log, op)
+	if err != nil {
+		return false, err
+	}
+
+	// Получение UserApp
+	userApp, err := getUserApp(ctx, a.userAppProvider, user.ID, app.ID, log, op)
+	if err != nil {
+		log.Error("failed to get user app", sl.Err(err))
+		return false, fmt.Errorf("%s: %w", op, err)
+	}
+
+	// Запрет доступа User к App
+	err = a.userAppUpdater.UpdateUserApp(ctx, userApp.UserID, userApp.AppID, false)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
 
 func (a *Auth) ValidateToken(ctx context.Context, token string, appCode string) (email string, err error) {
@@ -152,77 +206,33 @@ func (a *Auth) ValidateToken(ctx context.Context, token string, appCode string) 
 	)
 	log.Info("validating token")
 
+	// Получение App
 	app, err := getApp(ctx, a.appProvider, appCode, log, op)
 	if err != nil {
 		return "", err
 	}
 
+	// Валидация токена
 	email, err = jwt.ValidateToken(token, app.Secret)
 	if err != nil {
 		log.Error("failed to validate token", sl.Err(err))
 		return "", fmt.Errorf("%s: %w", op, err)
 	}
 
+	// Получение User
 	user, err := getUser(ctx, a.userProvider, email, log, op)
 	if err != nil {
 		return "", err
 	}
 
+	// Проверка доступа User к App
 	err = isAccessAllowed(ctx, a.userAppProvider, user.ID, app.ID, log, op)
 	if err != nil {
 		return "", err
 	}
-
-	err = isAccessAllowed(ctx, a.userAppProvider, user.ID, app.ID, log, op)
-	if err != nil {
-		return "", err
-	}
+	log.Info("token validated is successfully")
 
 	return email, nil
-}
-
-func (a *Auth) AccessControl(ctx context.Context, email string, appCode string, isEnabled bool) (string, error) {
-	const op = "Auth.AccessControl"
-
-	log := a.log.With(
-		slog.String("op", op),
-		slog.String("email", email),
-		slog.String("appCode", appCode),
-		slog.Bool("is_enabled", isEnabled),
-	)
-	log.Info("start access control")
-
-	user, err := getUser(ctx, a.userProvider, email, log, op)
-	if err != nil {
-		return "", err
-	}
-
-	app, err := getApp(ctx, a.appProvider, appCode, log, op)
-	if err != nil {
-		return "", err
-	}
-
-	userApp, err := getUserApp(ctx, a.userAppProvider, user.ID, app.ID, log, op)
-	if err != nil && errors.Is(err, storage.ErrUserAppNotFound) {
-		err = saveUserApp(ctx, a.userAppSaver, user.ID, app.ID, isEnabled, log, op)
-		if err != nil {
-			return "", err
-		} else {
-			return app.Code, nil
-		}
-	}
-
-	if err != nil {
-		log.Error("failed to get user app", sl.Err(err))
-		return "", fmt.Errorf("%s: %w", op, err)
-	}
-
-	err = a.userAppUpdater.UpdateUserApp(ctx, userApp.UserID, userApp.AppID, isEnabled)
-	if err != nil {
-		return "", err
-	}
-
-	return app.Code, nil
 }
 
 func getUser(
@@ -242,6 +252,7 @@ func getUser(
 		log.Error("failed to get user", sl.Err(err))
 		return models.User{}, fmt.Errorf("%s: %w", op, err)
 	}
+
 	return user, nil
 }
 
@@ -276,7 +287,6 @@ func getUserApp(
 			return models.UserApp{}, fmt.Errorf("%s: %w", op, ErrUserAppNotEnabled)
 		}
 
-		log.Error("failed to get user app", sl.Err(err))
 		return models.UserApp{}, fmt.Errorf("%s: %w", op, err)
 	}
 

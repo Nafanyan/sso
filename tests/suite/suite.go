@@ -3,45 +3,54 @@ package suite
 import (
 	"context"
 	"net"
-	"os"
-	"sso/internal/config"
 	"strconv"
 	"testing"
+	"time"
 
 	ssov1 "github.com/Nafanyan/sso-proto/gen/go/sso"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+// ClientCfg — только то, что нужно клиенту: куда стучаться и таймауты.
+type ClientCfg struct {
+	Port     int32
+	Timeout  time.Duration
+	TokenTTL time.Duration
+}
+
 type Suite struct {
 	*testing.T
-	Cfg        *config.Config
+	Cfg        ClientCfg
 	AuthClient ssov1.AuthClient
 }
 
 const (
-	grpcHost = "localhost"
+	grpcHost        = "localhost"
+	defaultPort     = 8080
+	defaultTimeout  = 60 * time.Second
+	defaultTokenTTL = time.Hour
 )
 
 func New(t *testing.T) (context.Context, *Suite) {
 	t.Helper()
 	t.Parallel()
 
-	cfg := config.MustLoadPath(configPath())
+	cfg := clientCfg()
 
-	ctx, cancelCtx := context.WithTimeout(context.Background(), cfg.GRPC.Timeout)
-
+	ctx, cancelCtx := context.WithTimeout(context.Background(), cfg.Timeout)
 	t.Cleanup(func() {
 		t.Helper()
 		cancelCtx()
 	})
 
 	cc, err := grpc.DialContext(context.Background(),
-		grpcAddress(cfg),
+		net.JoinHostPort(grpcHost, strconv.Itoa(int(cfg.Port))),
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc server connection failed: %v", err)
 	}
+	t.Cleanup(func() { _ = cc.Close() })
 
 	return ctx, &Suite{
 		T:          t,
@@ -50,16 +59,12 @@ func New(t *testing.T) (context.Context, *Suite) {
 	}
 }
 
-func configPath() string {
-	const key = "CONFIG_PATH"
-
-	if v := os.Getenv(key); v != "" {
-		return v
+func clientCfg() ClientCfg {
+	cfg := ClientCfg{
+		Port:     defaultPort,
+		Timeout:  defaultTimeout,
+		TokenTTL: defaultTokenTTL,
 	}
 
-	return "../config/local_tests_config.yaml"
-}
-
-func grpcAddress(cfg *config.Config) string {
-	return net.JoinHostPort(grpcHost, strconv.Itoa(int(cfg.GRPC.Port)))
+	return cfg
 }
