@@ -9,9 +9,10 @@ import (
 )
 
 type Config struct {
-	Env            string     `yaml:"env" env-default:"local"`
-	StoragePath    string     `yaml:"storage_path" env-default:"/data/storage"`
-	GRPC           GRPCConfig `yaml:"grpc"`
+	Env            string      `yaml:"env" env-default:"local"`
+	StoragePath    string      `yaml:"storage_path" env-default:"/data/storage"`
+	GRPC           GRPCConfig  `yaml:"grpc"`
+	Redis          RedisConfig `yaml:"redis"`
 	MigrationsPath string
 	TokenTTL       time.Duration `yaml:"token_ttl" env-default:"1h"`
 }
@@ -19,6 +20,11 @@ type Config struct {
 type GRPCConfig struct {
 	Port    int32         `yaml:"port"`
 	Timeout time.Duration `yaml:"timeout"`
+}
+
+type RedisConfig struct {
+	Addr     string `yaml:"addr" env-default:"localhost:6379"`
+	Password string
 }
 
 func MustLoad() *Config {

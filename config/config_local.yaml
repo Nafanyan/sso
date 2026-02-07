@@ -3,4 +3,7 @@ storage_path: "./storage/sso.db"
 grpc:
   port: 8080
   timeout: 10s
+redis:
+  addr: "localhost:6379"
+  password: ""
 token_ttl: 1h

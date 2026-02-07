@@ -24,7 +24,13 @@ func main() {
 
 	log := setupLogger(cfg.Env)
 
-	ssoApplication := app.New(log, cfg.GRPC.Port, cfg.StoragePath, cfg.TokenTTL)
+	ssoApplication := app.New(
+		log,
+		cfg.GRPC.Port,
+		cfg.StoragePath,
+		cfg.TokenTTL,
+		cfg.Redis.Addr,
+		cfg.Redis.Password)
 
 	go func() {
 		ssoApplication.MustRun()

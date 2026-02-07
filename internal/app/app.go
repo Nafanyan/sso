@@ -1,8 +1,11 @@
 package app
 
 import (
+	"context"
 	"log/slog"
 	grpcapp "sso/internal/app/grpc"
+	"sso/internal/app/redis"
+	redisapp "sso/internal/app/redis"
 	storageapp "sso/internal/app/storage"
 	"sso/internal/services/auth"
 	"time"
@@ -11,6 +14,7 @@ import (
 type App struct {
 	gRPCServer *grpcapp.App
 	storageApp *storageapp.App
+	redisApp   *redis.App
 }
 
 func New(
@@ -18,8 +22,16 @@ func New(
 	grpcPort int32,
 	storagePath string,
 	tokenTTL time.Duration,
+	redisAddr string,
+	redisPassword string,
 ) *App {
 	storageApp, err := storageapp.New(storagePath, log)
+	if err != nil {
+		panic(err)
+	}
+
+	ctx := context.Background()
+	redisApp, err := redisapp.New(ctx, redisAddr, redisPassword, log)
 	if err != nil {
 		panic(err)
 	}
@@ -38,6 +50,7 @@ func New(
 	return &App{
 		gRPCServer: grpcApp,
 		storageApp: storageApp,
+		redisApp:   redisApp,
 	}
 }
 
@@ -47,8 +60,6 @@ func (a *App) MustRun() {
 
 func (a *App) Stop() {
 	a.gRPCServer.Stop()
-	if err := a.storageApp.Storage.Close(); err != nil {
-		// Логируем ошибку закрытия storage, но не паникуем
-		// так как приложение уже завершается
-	}
+	a.storageApp.Storage.Close()
+	a.redisApp.Close()
 }
