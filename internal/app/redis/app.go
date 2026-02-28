@@ -3,22 +3,25 @@ package redis
 import (
 	"context"
 	"log/slog"
-	"sso/internal/lib/logger/sl"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 )
 
+const pingTimeout = 3 * time.Second
+
+// App — обёртка над Redis-клиентом с логгером и graceful close.
 type App struct {
 	log    *slog.Logger
-	Client *redis.Client
+	client *redis.Client
 }
 
-func New(ctx context.Context, addr string, password string, log *slog.Logger) (*App, error) {
-	const op = "redisapp.New"
+// New создаёт подключение к Redis. При пустом addr возвращает (nil, nil) — Redis отключён.
+func New(ctx context.Context, addr, password string, log *slog.Logger) (*App, error) {
+	const op = "redis.New"
 
 	if addr == "" {
-		log.With(slog.String("op", op)).Info("redis addr is empty, skipping redis init")
+		log.With(slog.String("op", op)).Info("redis addr is empty, skipping")
 		return nil, nil
 	}
 
@@ -28,10 +31,11 @@ func New(ctx context.Context, addr string, password string, log *slog.Logger) (*
 		DB:       0,
 	})
 
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	pingCtx, cancel := context.WithTimeout(ctx, pingTimeout)
 	defer cancel()
 
-	if err := client.Ping(ctx).Err(); err != nil {
+	if err := client.Ping(pingCtx).Err(); err != nil {
+		_ = client.Close()
 		return nil, err
 	}
 
@@ -39,20 +43,24 @@ func New(ctx context.Context, addr string, password string, log *slog.Logger) (*
 
 	return &App{
 		log:    log,
-		Client: client,
+		client: client,
 	}, nil
 }
 
-func (a *App) Close() {
-	const op = "redisapp.Close"
-	log := a.log.With(slog.String("op", op))
+// Client возвращает клиент Redis для использования в других пакетах. Если Redis отключён — nil.
+func (a *App) Client() *redis.Client {
+	if a == nil {
+		return nil
+	}
+	return a.client
+}
 
-	if a == nil || a.Client == nil {
-		log.Error("redis app is nil or client is nil, skipping redis close")
+// Close закрывает соединение с Redis. Безопасен для вызова при nil.
+func (a *App) Close() {
+	if a == nil || a.client == nil {
 		return
 	}
-
-	if err := a.Client.Close(); err != nil {
-		log.Error("failed to close redis", sl.Err(err))
+	if err := a.client.Close(); err != nil {
+		a.log.With(slog.String("op", "redis.Close")).Error("failed to close redis", slog.Any("err", err))
 	}
 }

@@ -30,7 +30,9 @@ func main() {
 		cfg.StoragePath,
 		cfg.TokenTTL,
 		cfg.Redis.Addr,
-		cfg.Redis.Password)
+		cfg.Redis.Password,
+		cfg.Redis.RateLimits.LoginLimit,
+		cfg.Redis.RateLimits.LoginWindow)
 
 	go func() {
 		ssoApplication.MustRun()

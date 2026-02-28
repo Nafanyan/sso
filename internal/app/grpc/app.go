@@ -7,6 +7,7 @@ import (
 	"net"
 	authgrpc "sso/internal/grpc/auth"
 	"sso/internal/lib/logger/sl"
+	"time"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
@@ -26,6 +27,9 @@ func New(
 	log *slog.Logger,
 	authService authgrpc.Auth,
 	port int32,
+	loginRateLimitBackend LoginRateLimitBackend,
+	loginRateLimit int64,
+	loginRateWindow time.Duration,
 ) *App {
 	loggingOpts := []logging.Option{
 		logging.WithLogOnEvents(
@@ -41,9 +45,12 @@ func New(
 		}),
 	}
 
+	loginLimiter := NewLoginRateLimiter(log, loginRateLimitBackend, loginRateLimit, loginRateWindow)
+
 	gRPCServer := grpc.NewServer(grpc.ChainUnaryInterceptor(
 		recovery.UnaryServerInterceptor(recoveryOpts...),
 		logging.UnaryServerInterceptor(InterceptorLogger(log), loggingOpts...),
+		loginLimiter.Unary(),
 	))
 
 	authgrpc.Register(gRPCServer, authService)

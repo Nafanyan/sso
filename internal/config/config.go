@@ -23,8 +23,14 @@ type GRPCConfig struct {
 }
 
 type RedisConfig struct {
-	Addr     string `yaml:"addr" env-default:"localhost:6379"`
-	Password string
+	Addr       string           `yaml:"addr" env-default:"localhost:6379"`
+	Password   string           `yaml:"password" env-default:""`
+	RateLimits RateLimitsConfig `yaml:"rate_limits"`
+}
+
+type RateLimitsConfig struct {
+	LoginLimit  int64         `yaml:"login_limit" env-default:"5"`
+	LoginWindow time.Duration `yaml:"login_window" env-default:"1m"`
 }
 
 func MustLoad() *Config {

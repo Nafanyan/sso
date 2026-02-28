@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	grpcapp "sso/internal/app/grpc"
 	"sso/internal/app/redis"
-	redisapp "sso/internal/app/redis"
 	storageapp "sso/internal/app/storage"
 	"sso/internal/services/auth"
 	"time"
@@ -24,6 +23,8 @@ func New(
 	tokenTTL time.Duration,
 	redisAddr string,
 	redisPassword string,
+	loginRateLimit int64,
+	loginRateWindow time.Duration,
 ) *App {
 	storageApp, err := storageapp.New(storagePath, log)
 	if err != nil {
@@ -31,9 +32,14 @@ func New(
 	}
 
 	ctx := context.Background()
-	redisApp, err := redisapp.New(ctx, redisAddr, redisPassword, log)
+	redisApp, err := redis.New(ctx, redisAddr, redisPassword, log)
 	if err != nil {
 		panic(err)
+	}
+
+	var loginRateLimitBackend grpcapp.LoginRateLimitBackend
+	if redisApp != nil {
+		loginRateLimitBackend = grpcapp.NewRedisLoginRateLimitBackend(redisApp.Client())
 	}
 
 	authService := auth.New(
@@ -45,7 +51,7 @@ func New(
 		storageApp.Storage,
 		storageApp.Storage,
 		tokenTTL)
-	grpcApp := grpcapp.New(log, authService, grpcPort)
+	grpcApp := grpcapp.New(log, authService, grpcPort, loginRateLimitBackend, loginRateLimit, loginRateWindow)
 
 	return &App{
 		gRPCServer: grpcApp,
@@ -61,5 +67,7 @@ func (a *App) MustRun() {
 func (a *App) Stop() {
 	a.gRPCServer.Stop()
 	a.storageApp.Storage.Close()
-	a.redisApp.Close()
+	if a.redisApp != nil {
+		a.redisApp.Close()
+	}
 }
