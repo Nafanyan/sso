@@ -26,6 +26,7 @@ func New(
 	log *slog.Logger,
 	authService authgrpc.Auth,
 	port int32,
+	loginRateLimitBackend RateLimitBackend,
 ) *App {
 	loggingOpts := []logging.Option{
 		logging.WithLogOnEvents(
@@ -44,6 +45,7 @@ func New(
 	gRPCServer := grpc.NewServer(grpc.ChainUnaryInterceptor(
 		recovery.UnaryServerInterceptor(recoveryOpts...),
 		logging.UnaryServerInterceptor(InterceptorLogger(log), loggingOpts...),
+		NewLoginRateLimiter(log, loginRateLimitBackend).Unary(),
 	))
 
 	authgrpc.Register(gRPCServer, authService)

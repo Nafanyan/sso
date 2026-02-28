@@ -137,12 +137,18 @@ func (a *Auth) Login(ctx context.Context, email string, password string, appCode
 		return "", err
 	}
 
-	// Получение UserApp, если нет - создаём новый с доступом, иначе включаем доступ
+	// Получение UserApp, если нет - создаём новый с доступом. При гонке несколько запросов
+	// могут получить ErrUserAppNotFound; первый создаёт запись, остальные получают ErrUserAppExists — это ок.
 	_, err = getUserApp(ctx, a.userAppProvider, user.ID, app.ID, log, op)
 	if err != nil && errors.Is(err, storage.ErrUserAppNotFound) {
 		err = saveUserApp(ctx, a.userAppSaver, user.ID, app.ID, true, log, op)
 		if err != nil {
-			return "", err
+			if errors.Is(err, storage.ErrUserAppExists) {
+				// Запись уже создана другим запросом — продолжаем, выдаём токен
+				err = nil
+			} else {
+				return "", err
+			}
 		}
 	}
 

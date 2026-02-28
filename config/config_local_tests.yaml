@@ -3,4 +3,10 @@ storage_path: "./storage/sso_test.db"
 grpc:
   port: 8080
   timeout: 60s   # 10s мало при отладке (Delve), оставляем запас
+redis:
+  addr: "localhost:6379"
+  password: ""
+  rate_limits:
+    login_limit: 5
+    login_window: 1m
 token_ttl: 1h
