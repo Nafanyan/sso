@@ -19,9 +19,10 @@ type App struct {
 // New создаёт подключение к Redis. При пустом addr возвращает (nil, nil) — Redis отключён.
 func New(ctx context.Context, addr, password string, log *slog.Logger) (*App, error) {
 	const op = "redis.New"
+	redisLog := log.With(slog.String("op", op), slog.String("addr", addr))
 
 	if addr == "" {
-		log.With(slog.String("op", op)).Info("redis addr is empty, skipping")
+		redisLog.Info("redis addr is empty, skipping")
 		return nil, nil
 	}
 
@@ -39,7 +40,7 @@ func New(ctx context.Context, addr, password string, log *slog.Logger) (*App, er
 		return nil, err
 	}
 
-	log.With(slog.String("op", op), slog.String("addr", addr)).Info("redis connected")
+	redisLog.Info("redis connected")
 
 	return &App{
 		log:    log,

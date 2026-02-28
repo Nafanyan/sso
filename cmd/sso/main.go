@@ -29,10 +29,7 @@ func main() {
 		cfg.GRPC.Port,
 		cfg.StoragePath,
 		cfg.TokenTTL,
-		cfg.Redis.Addr,
-		cfg.Redis.Password,
-		cfg.Redis.RateLimits.LoginLimit,
-		cfg.Redis.RateLimits.LoginWindow)
+		cfg.Redis)
 
 	go func() {
 		ssoApplication.MustRun()
